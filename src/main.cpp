@@ -135,14 +135,18 @@ vector<SurfaceElement> ReadFreezeOutSurface(string Surfpath) {
     return surface;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     const string SurfacePath = "surfacesFiles/"; 
+    string energy = argv[1];
+    string centrality = argv[2];
 
-    const string fname = "AuAu14/hydro_results_C0-5/surface_eps_0.26.dat";
+    const string fname = "AuAu"+energy+"/hydro_results_C"+centrality+"/surface_eps_0.26.dat";
 
     vector<SurfaceElement> surface;
+    cout << SurfacePath+fname << endl;
     surface = ReadFreezeOutSurface(SurfacePath+fname); 
-    cout << surface[230000].x[0] << endl;
+    cout << surface[230000].mu_B << endl;
+
 
 
     return 0;
