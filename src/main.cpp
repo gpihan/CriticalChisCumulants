@@ -143,11 +143,20 @@ int main(int argc, char *argv[]) {
     const string fname = "AuAu"+energy+"/hydro_results_C"+centrality+"/surface_eps_0.26.dat";
 
     vector<SurfaceElement> surface;
-    cout << SurfacePath+fname << endl;
     surface = ReadFreezeOutSurface(SurfacePath+fname); 
-    cout << surface[230000].mu_B << endl;
 
+    long int Nmax = 10000;
+    double p;
+    std::ofstream outFile("umu_values.txt");
+    outFile <<  "u0 u1 u2 u3" << "\n";
+    for (int i = 0; i < Nmax; ++i) {
+        outFile << surface[i].u[0] 
+            << " " << surface[i].u[1] 
+            << " " << surface[i].u[2] 
+            << " " << surface[i].u[3] 
+            << "\n";
+    }
 
-
+    outFile.close();
     return 0;
 }

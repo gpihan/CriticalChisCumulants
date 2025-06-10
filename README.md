@@ -1,13 +1,32 @@
 # CriticalChisCumulants
 
-In this repository we study the cumulants coming calculated with the critical chis.
+In this branch we read the momentum distributions from hydrodynamic hypersurface to plug it in the Leonard Jones calculations.
 
-Remaining work: 
 
-- Interpolation of the chis(T, muB)
-- write chis(T, muB) for each surface elements
-- calculate the cumulants in the full space  
-- calculate p on each surface element for Acceptance corrections to cumulants. 
+To compile the code (cmake is needed):
 
-Do all of this for a small CP region (to retrieve results far from critical point)
-do it with larger ("physical" region size)
+./compile 
+
+Download the surface file from 
+
+https://drive.google.com/drive/folders/1qvUmdLkOJoklMcrO9vFIexRz9ATx1IfJ
+
+put it in the path 
+
+surfaceFiles/surfacesFiles/AuAu7/hydro_results_C0-5
+
+create it. 
+
+Run the code using:
+
+./run
+
+
+
+
+
+Remaining work:
+
+- Find the characteristic lenght of the system at tau=tau_init.
+- Calculate the total amount of Net baryon.
+- Calculate p^{\mu} for each cells. 
