@@ -1,3 +1,8 @@
 #!/bin/bash
 
 ./build/SurfaceReader 7 0-5
+#./build/SurfaceReader 14 0-5
+#./build/SurfaceReader 19 0-5
+#./build/SurfaceReader 39 0-5
+#./build/SurfaceReader 62 0-5
+#./build/SurfaceReader 200 0-5
