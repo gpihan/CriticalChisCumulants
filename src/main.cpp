@@ -10,11 +10,13 @@
 #include <vector>
 #include <cmath>
 #include <boost/math/special_functions/bessel.hpp>
+#include <cstddef>
 
 #include <omp.h>
 #include <atomic>
 
 #include "Integration.h"
+#include "ScaledBesselI1.h"
 
 using namespace std;
 
@@ -45,32 +47,70 @@ typedef struct surfaceElement {
     double eps_plus_p_over_T_FO;  // (energy_density+pressure)/temperature
 } SurfaceElement;
 
-#include <vector>
-#include <cstddef>
 
-vector<vector<SurfaceElement>> splitVector(vector<SurfaceElement>& vec, int N) {
-    vector<vector<SurfaceElement>> chunks;
-    if (N <= 0) return chunks;
+struct chis{
+    double T, muB, chi1, chi2, chi3, chi4;
+};
 
-    size_t total = vec.size();
-    size_t base_size = total / N;
-    size_t remainder = total % N;
-
-    chunks.reserve(N);
-
-    size_t start = 0;
-    for (int i = 0; i < N; ++i) {
-        // First 'remainder' chunks get one extra element
-        size_t chunk_size = base_size + (i < remainder ? 1 : 0);
-
-        if (chunk_size == 0) break;  // more chunks than elements
-
-        size_t end = start + chunk_size;
-        chunks.emplace_back(vec.begin() + start, vec.begin() + end);
-        start = end;
+vector<chis> ReadTable(string fname){
+    vector<chis> table;
+    ifstream fin(fname);
+    
+    double T, muB, tmp1, tmp2, tmp3, tmp4, tmp5, chi1, chi2, chi3, chi4; 
+    while (fin >> T >> muB >> tmp1 >> chi1 >> tmp3 >> tmp4 >> tmp5 >> chi2 >> chi3 >> chi4) {
+        //table.push_back({T, muB, chi2 * T * T, chi3 * T, chi4}); // Normalization of chis are chi2/T^2, chi3/T, chi4
+        table.push_back({T, muB, chi1 * T * T * T /(0.1973 * 0.1973 * 0.1973), chi2, chi3, chi4}); // Normalization of chis are chi2/T^2, chi3/T, chi4
     }
+    return table;
+} 
+//vector<chis> ReadTable(string fname){
+//    vector<chis> table;
+//    ifstream fin(fname);
+//    
+//    double T, muB, chi1, chi2, chi3, chi4; 
+//    while (fin >> T >> muB >> chi1 >> chi2 >> chi3 >> chi4) {
+//        //table.push_back({T, muB, chi2 * T * T, chi3 * T, chi4}); // Normalization of chis are chi2/T^2, chi3/T, chi4
+//        table.push_back({T, muB, chi1 * T * T * T /(0.1973 * 0.1973 * 0.1973), chi2, chi3, chi4}); // Normalization of chis are chi2/T^2, chi3/T, chi4
+//    }
+//    return table;
+//} 
 
-    return chunks;
+
+struct Interpolator2D {
+    vector<double> xs;   // unique sorted x
+    vector<double> ys;   // unique sorted y
+    vector<double> F;    // flattened grid values
+
+    int nx, ny;
+
+    // bilinear evaluate
+    inline double eval(double x, double y) const;
+};
+
+inline double Interpolator2D::eval(double x, double y) const {
+    // locate index with binary_search or manual bisection
+    int ix = upper_bound(xs.begin(), xs.end(), x) - xs.begin() - 1;
+    int iy = upper_bound(ys.begin(), ys.end(), y) - ys.begin() - 1;
+
+    // Clamp
+    ix = max(0, min(ix, nx-2));
+    iy = max(0, min(iy, ny-2));
+
+    double x0 = xs[ix],   x1 = xs[ix+1];
+    double y0 = ys[iy],   y1 = ys[iy+1];
+
+    double f00 = F[ix*ny + iy];
+    double f01 = F[ix*ny + iy+1];
+    double f10 = F[(ix+1)*ny + iy];
+    double f11 = F[(ix+1)*ny + iy+1];
+
+    double tx = (x - x0) / (x1 - x0);
+    double ty = (y - y0) / (y1 - y0);
+
+    return (1-tx)*(1-ty)*f00 +
+           (1-tx)*ty*f01   +
+           tx*(1-ty)*f10   +
+           tx*ty*f11;
 }
 
 inline double I0_fast(double x)
@@ -90,24 +130,25 @@ inline double I0_fast(double x)
     }
 }
 
-inline double I1_fast(double x)
-{
-    double ax = fabs(x);
-    double y, ans;
-    if (ax < 3.75) {
-        double t = ax / 3.75;
-        t *= t;
-        ans = ax*(0.5 + t*(0.87890594 + t*(0.51498869 + t*(0.15084934
-                + t*(0.02658733 + t*(0.00301532 + t*0.00032411))))));
-    } else {
-        double t = 3.75/ax;
-        ans = 0.2282967 + t*(-0.2895312 + t*(0.1787654 - t*(0.4200590
-              + t*(0.6140116 - t*(0.6470344 + t*(0.3708892
-              - t*0.09347564))))));
-        ans = ans * exp(ax) / sqrt(ax);
-    }
-    return (x < 0.0 ? -ans : ans);
-}
+// This parametrisation at not correct enough
+//inline double I1_fast(double x)
+//{
+//    double ax = fabs(x);
+//    double y, ans;
+//    if (ax < 3.75) {
+//        double t = ax / 3.75;
+//        t *= t;
+//        ans = ax*(0.5 + t*(0.87890594 + t*(0.51498869 + t*(0.15084934
+//                + t*(0.02658733 + t*(0.00301532 + t*0.00032411))))));
+//    } else {
+//        double t = 3.75/ax;
+//        ans = 0.2282967 + t*(-0.2895312 + t*(0.1787654 - t*(0.4200590
+//              + t*(0.6140116 - t*(0.6470344 + t*(0.3708892
+//              - t*0.09347564))))));
+//        ans = ans * exp(ax) / sqrt(ax);
+//    }
+//    return (x < 0.0 ? -ans : ans);
+//}
 
 inline double I0_scaled_fast(double x)
 {
@@ -123,22 +164,22 @@ inline double I0_scaled_fast(double x)
     }
 }
 
-
-inline double I1_scaled_fast(double x)
-{
-    if (x < 3.75)
-        return I1_fast(x) * exp(-x);
-    else {
-        double ax = x;
-        double t = 3.75/ax;
-
-        double poly = 0.2282967 + t*(-0.2895312 + t*(0.1787654 - t*(0.4200590
-                     + t*(0.6140116 - t*(0.6470344 + t*(0.3708892
-                     - t*0.09347564))))));
-
-        return poly / sqrt(ax);
-    }
-}
+// This parametrisation at not correct enough
+//inline double I1_scaled_fast(double x)
+//{
+//    if (x < 3.75)
+//        return I1_fast(x) * exp(-x);
+//    else {
+//        double ax = x;
+//        double t = 3.75/ax;
+//
+//        double poly = 0.2282967 + t*(-0.2895312 + t*(0.1787654 - t*(0.4200590
+//                     + t*(0.6140116 - t*(0.6470344 + t*(0.3708892
+//                     - t*0.09347564))))));
+//
+//        return poly / sqrt(ax);
+//    }
+//}
 
 vector<double> MilneToCartesian(const vector<double>& Milne, const SurfaceElement& Surf){
     // This function translates a 4-vector expressed in Milne coordinates (tau, x, y, eta) in 
@@ -558,12 +599,17 @@ inline array<double,4> fbar_scaled_all(
         double prefactor,   // x + m/T * Gamma
         double pT,
         double mT,
-        double pToTuT       // pT/T * uT
+        double pToTuT,       // pT/T * uT
+        const ScaledBesselI1& ScaledB1
 )
 {
     // ----- 1. Compute both scaled Bessel functions once -----
     double I0 = I0_scaled_fast(pToTuT);
-    double I1 = I1_scaled_fast(pToTuT);
+    //double I1 = I1_scaled_fast(pToTuT);
+    //double I1 = Modified_Bessel_scaled(1, pToTuT); // The I0 parametrisation is correct but the I1 is wrong.
+    //                                               // prefer using the original I1 from boost
+    // Interpolation
+    double I1 = ScaledB1.eval(pToTuT);
 
     // ----- 2. Precompute shared multiplicative factors -----
     double pref_mT = prefactor * mT;
@@ -811,7 +857,7 @@ array<double,4> IntegralFull_all(
         const vector<double>& X, const vector<double>& W, const vector<double>& logW, int Nlag,
         double m, double T, const vector<double>& u, const vector<double>& dsigma,
         double threshold,
-        double prefacta, double u1ouT, double u2ouT, double uToT)
+        double prefacta, double u1ouT, double u2ouT, double uToT, const ScaledBesselI1& ScaledB1)
 {
     const auto abar = alphaBar_all(prefacta, u1ouT, u2ouT);
 
@@ -841,7 +887,7 @@ array<double,4> IntegralFull_all(
             pToTuT   = pT * uToT;
             exppToTuT = exp(pToTuT);
             // Compute 4× f̄(μ)
-            const auto fb = fbar_scaled_all(prefactfbar, pT, mT, pToTuT);
+            const auto fb = fbar_scaled_all(prefactfbar, pT, mT, pToTuT, ScaledB1);
             // dσμ p^μ positivity check
             if (checkdsigmamuXimuFULL(
                     abar[0], abar[1], abar[2], abar[3],
@@ -930,7 +976,7 @@ double deltaNcellFull(
         const vector<double>& u,
         const vector<double>& dsigma,
         double threshold,
-        double g)
+        double g, const ScaledBesselI1& ScaledB1)
 {
     double uT = std::sqrt(u[1]*u[1] + u[2]*u[2]);
     double uToT = uT / T;
@@ -954,7 +1000,7 @@ double deltaNcellFull(
         m, T,
         u, dsigma,
         threshold,
-        prefacta, u1ouT, u2ouT, uToT
+        prefacta, u1ouT, u2ouT, uToT, ScaledB1
     );
 
     // ---------------------------------------------------
@@ -1176,13 +1222,18 @@ inline array<double,4> ftilde_all(
         double prefactftilde,   // pT * exp(-mT/T * Gamma)
         double pT,
         double mT,
-        double pToTuT           // pT/T * uT
+        double pToTuT,           // pT/T * uT
+        const ScaledBesselI1& ScaledB1
 )
 {
     // Compute BOTH scaled Bessels once.
     // pToTuT >= 0 always → safe for Bessel I.
     double I0 = I0_fast(pToTuT);
-    double I1 = I1_fast(pToTuT);
+    //double I1 = I1_fast(pToTuT);
+    //double I1 = boost::math::cyl_bessel_i(1, pToTuT); // The parametrisation of I1 is not good enough.
+    // Interpolation
+    double I1 = ScaledB1.eval(pToTuT) * exp(pToTuT);
+
 
     // Prefactor applied only once
     double pref_mT = prefactftilde * mT;
@@ -1275,7 +1326,7 @@ array<double,4> IntegralAcc(
         double m,double T,
         const vector<double>& dsigma, const vector<double>& u,
         double threshold,
-        double prefactatilde, double u1ouT, double u2ouT, double uT)
+        double prefactatilde, double u1ouT, double u2ouT, double uT, const ScaledBesselI1& ScaledB1)
 {
     const auto at = alphaTilde_all(prefactatilde, u1ouT, u2ouT);
     double s0 = 0.0, s1 = 0.0, s2 = 0.0, s3 = 0.0;
@@ -1294,7 +1345,7 @@ array<double,4> IntegralAcc(
             mT = GetmT(threshold, pT, m);
             prefactftilde = pT * exp(-mT/T * Gamma);
             pToTuT = (pT/T) * uT;
-            const auto ft = ftilde_all(prefactftilde, pT, mT, pToTuT);
+            const auto ft = ftilde_all(prefactftilde, pT, mT, pToTuT, ScaledB1);
             if (checkdsigmamuXimuLEG(at[0], at[1], at[2], at[3],
                                      gt[0], gt[1], gt[2], gt[3],
                                      ft[0], ft[1], ft[2], ft[3],
@@ -1339,7 +1390,7 @@ double deltaNcellAcc(double YM,double pTm, double pTM,
         const vector<double>& Omega, const vector<double>& Y, int Nleg,
         const vector<double>& X, const vector<double>& Om, 
         double m, double T, const vector<double>& u, const vector<double>& dsigma,
-        double threshold, double g = 1.0)
+        double threshold, double g, const ScaledBesselI1& ScaledB1)
 {
     double prefactatilde = M_PI * (pTM - pTm);
     double uT = sqrt(u[1]*u[1] + u[2]*u[2]);
@@ -1349,7 +1400,7 @@ double deltaNcellAcc(double YM,double pTm, double pTM,
     array<double,4> Nmu = IntegralAcc(YM, pTm, pTM,
             Omega, Y, Nleg, X, Om,
             m, T, dsigma, u, threshold,
-            prefactatilde, u1ouT, u2ouT, uT);
+            prefactatilde, u1ouT, u2ouT, uT, ScaledB1);
 
     double contracted =
         Nmu[0] * dsigma[0] +
@@ -1402,54 +1453,54 @@ double Test(Acceptance Full, SurfaceElement Surf){
 
     double Analytic = analytic_number_density(m, T, mu_i);
     //cout << "Num Int : " << deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, mu_i, u, dsigma, threshold, 2) * exp(mu_i / T)  / (hbarc * hbarc * hbarc)  << "Analytic Int : " << Analytic << " T : " << T << " muB " << mu_i << endl; 
-    cout << "Num Int : " << deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, u, dsigma, threshold, 2) * exp(mu_i / T)  / (hbarc * hbarc * hbarc)  << "Analytic Int : " << Analytic << " T : " << T << " muB " << mu_i << endl; 
+    //cout << "Num Int : " << deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, u, dsigma, threshold, 2) * exp(mu_i / T)  / (hbarc * hbarc * hbarc)  << "Analytic Int : " << Analytic << " T : " << T << " muB " << mu_i << endl; 
     return 1.0;
 }
 
-double TestWithTransverseFlow(Acceptance Full, SurfaceElement Surf)
-{
-    double m = 0.938;
-    double hbarc = 0.1973269804; // GeV*fm
-
-    double T = Surf.T_f; 
-    double mu_i = Surf.mu_B;
-    double vT = 0.5;  // choose some transverse velocity
-    double gammaT = 1.0 / std::sqrt(1.0 - vT*vT);
-
-    // Already in cartesian coordinates.
-    // fluid 4-velocity in lab frame
-    std::vector<double> u = {gammaT, gammaT*vT, 0.0, 0.0};
-
-    // comoving time-like hypersurface: dsigma^mu ∝ u^mu
-    double dV = 1.0;  // fm^3
-    // get dsigma covariant.
-    std::vector<double> dsigma = {gammaT*dV, -gammaT*vT*dV, 0.0, 0.0};
-
-    NumericalIntegration NumInt;
-    std::vector<double> XLeg, WLeg, XLag, WLag;
-    NumInt.GetGaussLegendreCT32(XLeg, WLeg);
-    NumInt.GetGaussLaguerreCT32(XLag, WLag);
-
-    int Nleg = XLeg.size();
-    int Nlag = XLag.size();
-
-    double YM = Full.ymax;  // for a *true* test, make sure this mimics full y range
-
-    double threshold = 1000.0;
-
-    //double num_int = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, mu_i, u, dsigma, threshold, 2) * exp(mu_i/T) / (hbarc * hbarc * hbarc);
-    double num_int = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, u, dsigma, threshold, 2) * exp(mu_i/T) / (hbarc * hbarc * hbarc);
-
-    double analytic = analytic_number_density(m, T, mu_i);  // n(T, mu)*dV
-
-    std::cout << "vT = " << vT
-              << "  Num Int : " << num_int 
-              << "  Analytic : " << analytic
-              << "  ratio = " << num_int/analytic
-              << std::endl;
-
-    return num_int;
-}
+//double TestWithTransverseFlow(Acceptance Full, SurfaceElement Surf)
+//{
+//    double m = 0.938;
+//    double hbarc = 0.1973269804; // GeV*fm
+//
+//    double T = Surf.T_f; 
+//    double mu_i = Surf.mu_B;
+//    double vT = 0.5;  // choose some transverse velocity
+//    double gammaT = 1.0 / std::sqrt(1.0 - vT*vT);
+//
+//    // Already in cartesian coordinates.
+//    // fluid 4-velocity in lab frame
+//    std::vector<double> u = {gammaT, gammaT*vT, 0.0, 0.0};
+//
+//    // comoving time-like hypersurface: dsigma^mu ∝ u^mu
+//    double dV = 1.0;  // fm^3
+//    // get dsigma covariant.
+//    std::vector<double> dsigma = {gammaT*dV, -gammaT*vT*dV, 0.0, 0.0};
+//
+//    NumericalIntegration NumInt;
+//    std::vector<double> XLeg, WLeg, XLag, WLag;
+//    NumInt.GetGaussLegendreCT32(XLeg, WLeg);
+//    NumInt.GetGaussLaguerreCT32(XLag, WLag);
+//
+//    int Nleg = XLeg.size();
+//    int Nlag = XLag.size();
+//
+//    double YM = Full.ymax;  // for a *true* test, make sure this mimics full y range
+//
+//    double threshold = 1000.0;
+//
+//    //double num_int = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, mu_i, u, dsigma, threshold, 2) * exp(mu_i/T) / (hbarc * hbarc * hbarc);
+//    double num_int = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, u, dsigma, threshold, 2) * exp(mu_i/T) / (hbarc * hbarc * hbarc);
+//
+//    double analytic = analytic_number_density(m, T, mu_i);  // n(T, mu)*dV
+//
+//    std::cout << "vT = " << vT
+//              << "  Num Int : " << num_int 
+//              << "  Analytic : " << analytic
+//              << "  ratio = " << num_int/analytic
+//              << std::endl;
+//
+//    return num_int;
+//}
 
 //vector<double> GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf){
 //    // This function computes the probability p = NpAcc/NpFull representing the probability 
@@ -1523,7 +1574,7 @@ bool GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf,
         const vector<double>& WLeg,
         const vector<double>& XLag,
         const vector<double>& WLag,
-        int NLeg, int NLag){
+        int NLeg, int NLag, const Interpolator2D& chi1, const Interpolator2D& chi2, const Interpolator2D& chi3, const Interpolator2D& chi4, const ScaledBesselI1& ScaledB1){
     // This function computes the probability p = NpAcc/NpFull representing the probability 
     // of net proton to end up in the acceptance for one hydro cell.
     // It also returns the Net proton yields in acceptance and in the full space (for checks).
@@ -1537,10 +1588,18 @@ bool GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf,
     // Compute useful cell infos here
     double T = Surf.T_f; 
     double mu_p = Surf.mu_B + Surf.mu_C;
+    double muB = Surf.mu_B;
     vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
     vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
     vector<double> uC = MilneToCartesian(u, Surf);
     vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
+
+    double dV = uC[0] * dsigmaC[0] + uC[1] * dsigmaC[1] + uC[2] * dsigmaC[2] + uC[3] * dsigmaC[3]; 
+
+    double currentchi1 = chi1.eval(T, muB);
+    double currentchi2 = chi2.eval(T, muB);
+    double currentchi3 = chi3.eval(T, muB);
+    double currentchi4 = chi4.eval(T, muB);
 
     double YM = Full.ymax;
     double YMAcc = Acc.ymax;
@@ -1548,13 +1607,13 @@ bool GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf,
     double pTm = Acc.pTmin;
     double pTM = Acc.pTmax;
 
-    double NpFull;
-    double NpAcc;
+    double NpFull = 1.0;
+    double NpAcc = 1.0;
 
-    //NpFull = deltaNcellFull(YM, WLeg, XLeg, NLeg, XLag, WLag, NLag, m, T, mu_p, uC, dsigmaC, threshold, gp);
-    NpFull = deltaNcellFull(YM, WLeg, XLeg, NLeg, XLag, WLag, NLag, m, T, uC, dsigmaC, threshold, gp);
-    //NpAcc = deltaNcellAcc(YMAcc, pTm, pTM, WLeg, XLeg, NLeg, XLeg, WLeg, m, T, mu_p, uC, dsigmaC, threshold, gp);
-    NpAcc = deltaNcellAcc(YMAcc, pTm, pTM, WLeg, XLeg, NLeg, XLeg, WLeg, m, T, uC, dsigmaC, threshold, gp);
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // By passing alpha calculation for efficieny of tests ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //NpFull = deltaNcellFull(YM, WLeg, XLeg, NLeg, XLag, WLag, NLag, m, T, uC, dsigmaC, threshold, gp, ScaledB1);
+    //NpAcc = deltaNcellAcc(YMAcc, pTm, pTM, WLeg, XLeg, NLeg, XLeg, WLeg, m, T, uC, dsigmaC, threshold, gp, ScaledB1);
 
     // alpha
     p[0] = NpAcc/NpFull;
@@ -1574,6 +1633,18 @@ bool GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf,
     p[7] = (p[2] + p[4])/2;
     // antiprotons Full
     p[8] = (p[4] - p[2])/2;
+    //chi2 * dV
+    p[9] = currentchi2 * dV * T * T * T;
+    //chi3 * dV
+    p[10] = currentchi3 * dV * T * T * T;
+    //chi4 * dV
+    p[11] = currentchi4 * dV * T * T * T;
+    // cell volume
+    p[12] = dV;
+    // chi1 * dV
+    p[13] = Surf.rho_B * dV;
+    // chi1 Table * dV
+    p[14] = currentchi1 * dV;
 
 
     // Manage negative contributions, avoid cells if they have negative probabilities.
@@ -1581,6 +1652,76 @@ bool GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf,
         return false;
     }
     else if(p[0] > 1.0){
+        return false; 
+    }
+    else{
+        return true;
+    }
+}
+
+bool GetSTOREDDATA(Acceptance Acc, Acceptance Full, SurfaceElement Surf, double* p, 
+        const vector<double>& XLeg,
+        const vector<double>& WLeg,
+        const vector<double>& XLag,
+        const vector<double>& WLag,
+        int NLeg, int NLag, const ScaledBesselI1& ScaledB1){
+    // This function computes the probability p = NpAcc/NpFull representing the probability 
+    // of net proton to end up in the acceptance for one hydro cell.
+    // It also returns the Net proton yields in acceptance and in the full space (for checks).
+
+    // Put this out
+    double hbarc = 0.1973269804; // GeV*fm
+    double threshold = 1000.0;
+    double m = 0.938;
+    double gp = 2;
+
+    // Compute useful cell infos here
+    double T = Surf.T_f; 
+    double mu_p = Surf.mu_B + Surf.mu_C;
+    double muB = Surf.mu_B;
+    double muQ = Surf.mu_C;
+    double muS = Surf.mu_S;
+    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
+    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
+    vector<double> uC = MilneToCartesian(u, Surf);
+    vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
+
+    double dV = uC[0] * dsigmaC[0] + uC[1] * dsigmaC[1] + uC[2] * dsigmaC[2] + uC[3] * dsigmaC[3]; 
+
+    double YM = Full.ymax;
+    double YMAcc = Acc.ymax;
+
+    double pTm = Acc.pTmin;
+    double pTM = Acc.pTmax;
+
+    double NpFull = 1.0;
+    double NpAcc = 1.0;
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // By passing alpha calculation for efficieny of tests ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    NpFull = deltaNcellFull(YM, WLeg, XLeg, NLeg, XLag, WLag, NLag, m, T, uC, dsigmaC, threshold, gp, ScaledB1);
+    NpAcc = deltaNcellAcc(YMAcc, pTm, pTM, WLeg, XLeg, NLeg, XLeg, WLeg, m, T, uC, dsigmaC, threshold, gp, ScaledB1);
+
+    // T
+    p[0] = T;
+    // muB
+    p[1] = muB;
+    // muQ
+    p[2] = muQ;
+    // muS
+    p[3] = muS;
+    // alpha
+    p[4] = NpAcc/NpFull;
+    // nB surface
+    p[5] = Surf.rho_B;
+    // Cell Volume
+    p[6] = dV;
+
+    // Manage negative contributions, avoid cells if they have negative probabilities.
+    if(p[4] < 0.0){
+        return false;
+    }
+    else if(p[4] > 1.0){
         return false; 
     }
     else{
@@ -1641,83 +1782,129 @@ bool GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf,
 //    //return NpFull * exp(mu_n/T);
 //
 //}
-double GetFullNB(Acceptance Full, SurfaceElement Surf){
-    // This function computes the probability p = NAcc/NFull representing the probability 
-    // of ending up in the acceptance for one hydro cell.
-    // It also returns the yields in acceptance and in the full space (for checks).
-    double threshold = 100.0;
-    double m = 0.938;
+//double GetFullNB(Acceptance Full, SurfaceElement Surf){
+//    // This function computes the probability p = NAcc/NFull representing the probability 
+//    // of ending up in the acceptance for one hydro cell.
+//    // It also returns the yields in acceptance and in the full space (for checks).
+//    double threshold = 100.0;
+//    double m = 0.938;
+//
+//    double T = Surf.T_f; 
+//    double mu_i = Surf.mu_B;
+//    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
+//
+//    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
+//
+//    vector<double> uC = MilneToCartesian(u, Surf);
+//    vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
+//
+//    NumericalIntegration NumInt;
+//    vector<double> XLeg, WLeg, XLag, WLag;
+//
+//    NumInt.GetGaussLegendreCT32(XLeg, WLeg);    
+//    NumInt.GetGaussLaguerreCT32(XLag, WLag);    
+//
+//    int Nleg = XLeg.size();
+//    int Nlag = XLag.size();
+//
+//    double YM = Full.ymax;
+//
+//    double NpFull;
+//    double gp = 2;
+//
+//
+//    NpFull = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, uC, dsigmaC, threshold, gp);
+//    double mu_p = Surf.mu_B + Surf.mu_C;
+//    double mu_n = Surf.mu_B;
+//
+//
+//    return 2 * NpFull * (sinh(mu_p/T) + sinh(mu_n/T));
+//
+//}
+//double GetAccNB(Acceptance Acc, SurfaceElement Surf){
+//    // This function computes the probability p = NAcc/NFull representing the probability 
+//    // of ending up in the acceptance for one hydro cell.
+//    // It also returns the yields in acceptance and in the full space (for checks).
+//    double threshold = 100.0;
+//    double m = 0.938;
+//
+//    double T = Surf.T_f; 
+//    double mu_i = Surf.mu_B;
+//    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
+//
+//    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
+//
+//    const vector<double> uC = MilneToCartesian(u, Surf);
+//    const vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
+//
+//    NumericalIntegration NumInt;
+//    vector<double> XLeg, WLeg;
+//
+//    NumInt.GetGaussLegendreCT32(XLeg, WLeg);    
+//
+//    int NLeg = XLeg.size();
+//
+//    double YMAcc = Acc.ymax;
+//    double pTm = Acc.pTmin;
+//    double pTM = Acc.pTmax;
+//
+//    double gp = 2;
+//
+//
+//    double NpAcc = deltaNcellAcc(YMAcc, pTm, pTM, WLeg, XLeg, NLeg, XLeg, WLeg, m, T, uC, dsigmaC, threshold, gp);
+//
+//    double mu_p = Surf.mu_B + Surf.mu_C;
+//    double mu_n = Surf.mu_B;
+//
+//
+//    return 2 * NpAcc * (sinh(mu_p/T) + sinh(mu_n/T));
+//
+//}
 
-    double T = Surf.T_f; 
-    double mu_i = Surf.mu_B;
-    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
 
-    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
+void extract_unique_xy_structured(const vector<chis>& data, int nx, int ny,
+                                  vector<double>& xs, vector<double>& ys)
+{
+    xs.resize(nx);
+    ys.resize(ny);
 
-    vector<double> uC = MilneToCartesian(u, Surf);
-    vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
+    // xs comes from the first element of each block of ny rows
+    for (int i = 0; i < nx; i++)
+        xs[i] = data[i * ny].T;
 
-    NumericalIntegration NumInt;
-    vector<double> XLeg, WLeg, XLag, WLag;
-
-    NumInt.GetGaussLegendreCT32(XLeg, WLeg);    
-    NumInt.GetGaussLaguerreCT32(XLag, WLag);    
-
-    int Nleg = XLeg.size();
-    int Nlag = XLag.size();
-
-    double YM = Full.ymax;
-
-    double NpFull;
-    double gp = 2;
-
-
-    NpFull = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, uC, dsigmaC, threshold, gp);
-    double mu_p = Surf.mu_B + Surf.mu_C;
-    double mu_n = Surf.mu_B;
-
-
-    return 2 * NpFull * (sinh(mu_p/T) + sinh(mu_n/T));
-
+    // ys comes from the first row (assuming order as described)
+    for (int j = 0; j < ny; j++)
+        ys[j] = data[j].muB;
 }
-double GetAccNB(Acceptance Acc, SurfaceElement Surf){
-    // This function computes the probability p = NAcc/NFull representing the probability 
-    // of ending up in the acceptance for one hydro cell.
-    // It also returns the yields in acceptance and in the full space (for checks).
-    double threshold = 100.0;
-    double m = 0.938;
 
-    double T = Surf.T_f; 
-    double mu_i = Surf.mu_B;
-    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
+vector<double> ExtractChi1(vector<chis> Chis){
+    vector<double> chi;
+    for(auto& c:Chis){
+        chi.push_back(c.chi1);
+    }
+    return chi;
+}
 
-    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
-
-    const vector<double> uC = MilneToCartesian(u, Surf);
-    const vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
-
-    NumericalIntegration NumInt;
-    vector<double> XLeg, WLeg;
-
-    NumInt.GetGaussLegendreCT32(XLeg, WLeg);    
-
-    int NLeg = XLeg.size();
-
-    double YMAcc = Acc.ymax;
-    double pTm = Acc.pTmin;
-    double pTM = Acc.pTmax;
-
-    double gp = 2;
-
-
-    double NpAcc = deltaNcellAcc(YMAcc, pTm, pTM, WLeg, XLeg, NLeg, XLeg, WLeg, m, T, uC, dsigmaC, threshold, gp);
-
-    double mu_p = Surf.mu_B + Surf.mu_C;
-    double mu_n = Surf.mu_B;
-
-
-    return 2 * NpAcc * (sinh(mu_p/T) + sinh(mu_n/T));
-
+vector<double> ExtractChi2(vector<chis> Chis){
+    vector<double> chi;
+    for(auto& c:Chis){
+        chi.push_back(c.chi2);
+    }
+    return chi;
+}
+vector<double> ExtractChi3(vector<chis> Chis){
+    vector<double> chi;
+    for(auto& c:Chis){
+        chi.push_back(c.chi3);
+    }
+    return chi;
+}
+vector<double> ExtractChi4(vector<chis> Chis){
+    vector<double> chi;
+    for(auto& c:Chis){
+        chi.push_back(c.chi4);
+    }
+    return chi;
 }
 
 int main(int argc, char *argv[]) {
@@ -1728,8 +1915,42 @@ int main(int argc, char *argv[]) {
 
     // Read Surface file
     const string SurfacePath = "surfacesFiles/"; 
-    //const string fname = "AuAu"+energy+"/hydro_results_C"+centrality+"/surface_eps_0.26.dat";
-    const string fname = "PbPb"+energy+"/hydro_results_C"+centrality+"/surface_eps_0.2.dat";
+    const string fname = "AuAu"+energy+"/hydro_results_C"+centrality+"/surface_eps_0.26.dat";
+    //const string fname = "PbPb"+energy+"/hydro_results_C"+centrality+"/surface_eps_0.2.dat";
+
+    // Setup chis interpolations
+    // Bessel I1 interpolation
+    double pToTuTThreshold = 50.0; // after that, asymptotic expansion has rel err 1e-7. 
+    int Nbess = 6000;
+    static const ScaledBesselI1 I1_scaled_interp(pToTuTThreshold, Nbess);
+
+    const string EoSTablePath = "EoS_table/EoSTable.dat";
+    vector<chis> EoS = ReadTable(EoSTablePath);
+    Interpolator2D tmpinterpchi1, tmpinterpchi2, tmpinterpchi3, tmpinterpchi4;
+
+    int nx = 371; // To adapt if the table changes.
+    //int nx = 771; // To adapt if the table changes.
+    int ny = 701;
+    vector<double> xs, ys; 
+    extract_unique_xy_structured(EoS, nx,ny, xs, ys);
+
+    tmpinterpchi1.nx = nx;tmpinterpchi2.nx = nx;tmpinterpchi3.nx = nx;tmpinterpchi4.nx = nx;
+    tmpinterpchi1.ny = ny;tmpinterpchi2.ny = ny;tmpinterpchi3.ny = ny;tmpinterpchi4.ny = ny;
+
+    tmpinterpchi1.xs = xs;tmpinterpchi2.xs = xs;tmpinterpchi3.xs = xs;tmpinterpchi4.xs = xs;
+    tmpinterpchi1.ys = ys;tmpinterpchi2.ys = ys;tmpinterpchi3.ys = ys;tmpinterpchi4.ys = ys;
+
+    tmpinterpchi1.F = ExtractChi1(EoS);
+    tmpinterpchi2.F = ExtractChi2(EoS);
+    tmpinterpchi3.F = ExtractChi3(EoS);
+    tmpinterpchi4.F = ExtractChi4(EoS);
+
+
+    static const Interpolator2D interpchi1 = tmpinterpchi1;
+    static const Interpolator2D interpchi2 = tmpinterpchi2;
+    static const Interpolator2D interpchi3 = tmpinterpchi3;
+    static const Interpolator2D interpchi4 = tmpinterpchi4;
+
 
     vector<SurfaceElement> surface;
 
@@ -1757,13 +1978,51 @@ int main(int argc, char *argv[]) {
 
     // Setup parallelization
     size_t n_cells = selectedCells.size();
-    size_t n_double_per_cell = 9;
+    size_t n_double_per_cell = 15;
+    size_t n_store_double_per_cell = 7; 
     size_t cells_per_thread = n_cells / omp_get_max_threads() + 1;
 
     cout << "Total number of cells " << n_cells << endl;
     cout << "Start running on " <<  omp_get_max_threads() << " threads" << endl;
     cout << "\n" << endl;
 
+    ////////////////////////////////////////////////////////////
+    // Test chis interpolation
+
+    //vector<double> u;
+    //SurfaceElement cell;
+    //vector<double> dsigma;
+    //vector<double> uC;
+    //vector<double> dsigmaC;
+    //double T, muB, chi2, chi3 ,chi4, dV1, dV2;
+    //double s1 = 0.0;
+    //double s2 = 0.0;
+    //double tau;
+    //for(int i = 0; i<selectedCells.size(); i++){
+    //    cell = selectedCells[i]; 
+    //    T = cell.T_f;
+    //    muB = cell.mu_B;
+    //    chi2 = interpchi2.eval(T, muB);
+    //    chi3 = interpchi3.eval(T, muB);
+    //    chi4 = interpchi4.eval(T, muB);
+
+    //    u = {cell.u[0], cell.u[1], cell.u[2], cell.u[3]};
+    //    dsigma = {cell.s[0], cell.s[1], cell.s[2], cell.s[3]};
+    //    uC = MilneToCartesian(u, cell);
+    //    dsigmaC = MilneToCartesianSigmaCov(dsigma, cell);
+
+    //    tau = cell.x[0];
+    //    dV1 = uC[0] * dsigmaC[0] + uC[1] * dsigmaC[1] + uC[2] * dsigmaC[2] + uC[3] * dsigmaC[3]; 
+    //    s1 += dV1 * cell.rho_B;
+    //    dV2 = tau * (u[0]*dsigma[0] + u[1]*dsigma[1] + u[2]*dsigma[2] + u[3]*(dsigma[3]/tau)); 
+    //    s2 += dV2 * cell.rho_B;
+
+    ////    cout << T << " " << muB << " " << chi2 << " " << chi3 << " " << chi4 <<endl;
+    //}
+    //cout << s1 << " " << s2 << endl;
+
+
+    ///// HERE MAIN CODE ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Prepare integration
     NumericalIntegration NumInt;
     vector<double> XLeg, WLeg, XLag, WLag;
@@ -1775,11 +2034,11 @@ int main(int argc, char *argv[]) {
     int NLag = XLag.size();
 
 
-    /// HERE
-    vector<double> OUT;
+    vector<double> OUT, OUTSTORE;
     vector<bool> OUT_CHECK;
     OUT_CHECK.resize(n_cells);
     OUT.resize(n_cells * n_double_per_cell);
+    OUTSTORE.resize(n_cells * n_store_double_per_cell);
     atomic<size_t> counter(0);
 
     //size_t DebugCell = 1411080;
@@ -1789,10 +2048,10 @@ int main(int argc, char *argv[]) {
         #pragma omp for schedule(static)
         for (size_t k = 0; k < selectedCells.size(); ++k) {
         //for (size_t k = DebugCell-100000; k < DebugCell+100000; ++k) {
-            bool OutGet = GetProbabilityProtons(Acc, FullSpace, selectedCells[k], &OUT[k * n_double_per_cell], XLeg, WLeg, XLag, WLag, NLeg, NLag);
+            //bool OutGet = GetProbabilityProtons(Acc, FullSpace, selectedCells[k], &OUT[k * n_double_per_cell], XLeg, WLeg, XLag, WLag, NLeg, NLag, interpchi1, interpchi2, interpchi3, interpchi4, I1_scaled_interp);
+            bool OutGet = GetSTOREDDATA(Acc, FullSpace, selectedCells[k], &OUTSTORE[k * n_store_double_per_cell], XLeg, WLeg, XLag, WLag, NLeg, NLag, I1_scaled_interp);
             OUT_CHECK[k] = OutGet; 
             ++local_count;
-
             if (local_count % 1000 == 0) {
                 counter += 1000;
                 if (omp_get_thread_num() == 0)
@@ -1802,36 +2061,96 @@ int main(int argc, char *argv[]) {
     }
 
     // Write in a file.
-    double pvec0, pvec1, pvec2;
-    double pvec3, pvec4, pvec5;
-    double pvec6, pvec7, pvec8;
-    double tau, x, y, eta;
-    ofstream outFile("p_values_"+energy+"_"+centrality+".txt");
+    //double pvec0, pvec1, pvec2;
+    //double pvec3, pvec4, pvec5;
+    //double pvec6, pvec7, pvec8;
+    //double pvec9, pvec10, pvec11, pvec12, pvec13, pvec14;
+    //double tau, x, y, eta;
+    //ofstream outFile("p_values_"+energy+"_"+centrality+".txt");
 
-    outFile << "# alpha netpAcc netpFull sumpAcc sumpFull protonAcc antiprotonAcc protonFull antiprotonFull" << "\n"; 
+    ////outFile << "# alpha netpAcc netpFull sumpAcc sumpFull protonAcc antiprotonAcc protonFull antiprotonFull chi2 dV chi3 dV chi4 dV tau x y eta dV check" << "\n"; 
+    //for(int j = 0; j < OUT_CHECK.size(); j++){
+    ////    pvec0 = OUT[j*n_double_per_cell]; // alpha net proton
+
+    ////    OutGet = OUT_CHECK[j];
+    //    outFile << pvec0 << "\n"; 
+    ////}
+    //outFile.close();
+
+    //outFile << "# alpha netpAcc netpFull sumpAcc sumpFull protonAcc antiprotonAcc protonFull antiprotonFull chi2 dV chi3 dV chi4 dV tau x y eta dV check" << "\n"; 
+    //for(int j = 0; j < OUT_CHECK.size(); j++){
+    //    pvec0 = OUT[j*n_double_per_cell]; // alpha net proton
+    //    pvec1 = OUT[j*n_double_per_cell+1]; // net proton Acc
+    //    pvec2 = OUT[j*n_double_per_cell+2]; // net proton Full
+
+    //    pvec3 = OUT[j*n_double_per_cell+3]; // sum proton Acc
+    //    pvec4 = OUT[j*n_double_per_cell+4]; // sum proton Full
+    //    pvec5 = OUT[j*n_double_per_cell+5]; // proton Acc
+
+    //    pvec6 = OUT[j*n_double_per_cell+6]; // antiproton Acc
+    //    pvec7 = OUT[j*n_double_per_cell+7]; // protons Full
+    //    pvec8 = OUT[j*n_double_per_cell+8]; // antiprotons Full
+
+    //    pvec9 = OUT[j*n_double_per_cell+9]; // chi2 dV
+    //    pvec10 = OUT[j*n_double_per_cell+10]; // chi3 dV
+    //    pvec11 = OUT[j*n_double_per_cell+11]; // chi4 dV
+    //    pvec12 = OUT[j*n_double_per_cell+12]; // dV
+    //    pvec13 = OUT[j*n_double_per_cell+13]; // rhoB * dV
+    //    pvec14 = OUT[j*n_double_per_cell+14]; // chi1 * dV
+
+
+    //    tau = selectedCells[j].x[0];
+    //    x = selectedCells[j].x[1];
+    //    y = selectedCells[j].x[2];
+    //    eta = selectedCells[j].x[3];
+
+    //    OutGet = OUT_CHECK[j];
+    //    outFile << pvec0 << "  " // 0 alpha 
+    //        << pvec1 << "  " // 1 net proton Acc
+    //        << pvec2 << " " // 2  net proton Full
+    //        << pvec3 << " " // 3 sum proton Acc
+    //        << pvec4 << " " // 4 sum proton Full
+    //        << pvec5 << " " // 5 proton Acc
+    //        << pvec6 << " " // 6 antiproton Acc 
+    //        << pvec7 << " " // 7 proton Full 
+    //        << pvec8 << " " // 8 antiprotons full
+    //        << pvec9 << " " // 9 chi2 dV
+    //        << pvec10 << " " // 10 chi3 dV
+    //        << pvec11 << " " // 11 chi4 dV
+    //        << pvec13 << " " // 12 nB dV
+    //        << pvec14 << " " // 13 chi1 dV
+    //        << tau << " " // 14 tau 
+    //        << x << " " // 15 x
+    //        << y << " " // 16 y
+    //        << eta << " " // 17 eta
+    //        << pvec12 << " " // 18 dV
+    //        << OutGet << "\n"; // 19 check
+    //}
+    //outFile.close();
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Write in a file STORE.
+    double Svec0, Svec1, Svec2, Svec3, Svec4, Svec5, Svec6;
+    ofstream outFileS("STORED_values_"+energy+"_"+centrality+".txt");
+
+    outFileS << "# T(GeV)    muB(GeV)    muQ(GeV)    muS(GeV)    alpha   nB(fm-3)    dV(fm3)" << "\n"; 
     for(int j = 0; j < OUT_CHECK.size(); j++){
-        pvec0 = OUT[j*n_double_per_cell];
-        pvec1 = OUT[j*n_double_per_cell+1];
-        pvec2 = OUT[j*n_double_per_cell+2];
+        Svec0 = OUTSTORE[j*n_store_double_per_cell];   // T (GeV) 
+        Svec1 = OUTSTORE[j*n_store_double_per_cell+1]; // muB (GeV)
+        Svec2 = OUTSTORE[j*n_store_double_per_cell+2]; // muQ (GeV)
+        Svec3 = OUTSTORE[j*n_store_double_per_cell+3]; // muS (GeV) 
+        Svec4 = OUTSTORE[j*n_store_double_per_cell+4]; // alpha
+        Svec5 = OUTSTORE[j*n_store_double_per_cell+5]; // nb hydro (fm-3)
+        Svec6 = OUTSTORE[j*n_store_double_per_cell+6]; // dV (fm3)
 
-        pvec3 = OUT[j*n_double_per_cell+3];
-        pvec4 = OUT[j*n_double_per_cell+4];
-        pvec5 = OUT[j*n_double_per_cell+5];
-
-        pvec6 = OUT[j*n_double_per_cell+6];
-        pvec7 = OUT[j*n_double_per_cell+7];
-        pvec8 = OUT[j*n_double_per_cell+8];
-
-        tau = selectedCells[j].x[0];
-        x = selectedCells[j].x[1];
-        y = selectedCells[j].x[2];
-        eta = selectedCells[j].x[3];
-
-        OutGet = OUT_CHECK[j];
-        outFile << pvec0 << "  " << pvec1 << "  " << pvec2 << " " << pvec3 << " " << pvec4 << " " 
-            << pvec5 << " " << pvec6 << " " << pvec7 << " " << pvec8 << " " << OutGet << " " << tau << " " << x << " " << y << " " << eta << "\n"; 
+        outFileS << Svec0 << "  " // 0 T  
+            << Svec1 << "  "     // 1 muB
+            << Svec2 << " "      // 2 muQ
+            << Svec3 << " "      // 3 muS
+            << Svec4 << " "      // 4 alppha
+            << Svec5 << " "      // 5 nb
+            << Svec6 << "\n";    // 6 dV
     }
-    outFile.close();
+    outFileS.close();
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Test compared to analytical formula, validation of the integration process.
