@@ -63,18 +63,6 @@ vector<chis> ReadTable(string fname){
     }
     return table;
 } 
-//vector<chis> ReadTable(string fname){
-//    vector<chis> table;
-//    ifstream fin(fname);
-//    
-//    double T, muB, chi1, chi2, chi3, chi4; 
-//    while (fin >> T >> muB >> chi1 >> chi2 >> chi3 >> chi4) {
-//        //table.push_back({T, muB, chi2 * T * T, chi3 * T, chi4}); // Normalization of chis are chi2/T^2, chi3/T, chi4
-//        table.push_back({T, muB, chi1 * T * T * T /(0.1973 * 0.1973 * 0.1973), chi2, chi3, chi4}); // Normalization of chis are chi2/T^2, chi3/T, chi4
-//    }
-//    return table;
-//} 
-
 
 struct Interpolator2D {
     vector<double> xs;   // unique sorted x
@@ -130,26 +118,6 @@ inline double I0_fast(double x)
     }
 }
 
-// This parametrisation at not correct enough
-//inline double I1_fast(double x)
-//{
-//    double ax = fabs(x);
-//    double y, ans;
-//    if (ax < 3.75) {
-//        double t = ax / 3.75;
-//        t *= t;
-//        ans = ax*(0.5 + t*(0.87890594 + t*(0.51498869 + t*(0.15084934
-//                + t*(0.02658733 + t*(0.00301532 + t*0.00032411))))));
-//    } else {
-//        double t = 3.75/ax;
-//        ans = 0.2282967 + t*(-0.2895312 + t*(0.1787654 - t*(0.4200590
-//              + t*(0.6140116 - t*(0.6470344 + t*(0.3708892
-//              - t*0.09347564))))));
-//        ans = ans * exp(ax) / sqrt(ax);
-//    }
-//    return (x < 0.0 ? -ans : ans);
-//}
-
 inline double I0_scaled_fast(double x)
 {
     if (x < 3.75)
@@ -163,23 +131,6 @@ inline double I0_scaled_fast(double x)
             + t*(-0.01647633 + t*0.00392377))))))));
     }
 }
-
-// This parametrisation at not correct enough
-//inline double I1_scaled_fast(double x)
-//{
-//    if (x < 3.75)
-//        return I1_fast(x) * exp(-x);
-//    else {
-//        double ax = x;
-//        double t = 3.75/ax;
-//
-//        double poly = 0.2282967 + t*(-0.2895312 + t*(0.1787654 - t*(0.4200590
-//                     + t*(0.6140116 - t*(0.6470344 + t*(0.3708892
-//                     - t*0.09347564))))));
-//
-//        return poly / sqrt(ax);
-//    }
-//}
 
 vector<double> MilneToCartesian(const vector<double>& Milne, const SurfaceElement& Surf){
     // This function translates a 4-vector expressed in Milne coordinates (tau, x, y, eta) in 
@@ -372,67 +323,6 @@ vector<SurfaceElement> ReadFreezeOutSurface(string Surfpath) {
     return surface;
 }
 
-
-
-// Full space Laguerre+Legendre integral ---------------------------------------------
-// The integrals will not contain the exp(mu_i/T) factors as they can be factorized when computing the 
-// total yield of particle i
-//double alphaBar(int mu, double T, double mu_i, vector<double>& u){
-//    // This function computes the \bar{\alpha} function for its use 
-//    // in the Laguerre integration.
-//    double uT; // Transverse 4-velocity of flow
-//    // Here, the definition does not contain fugacity factor.
-//    //double prefactor = 2 * M_PI * exp(mu_i/T) * T * T; 
-//    double prefactor = 2 * M_PI * T * T; 
-//    if(mu == 0){
-//        return prefactor; 
-//    }
-//    else if(mu == 1){
-//        uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//        return prefactor * u[1] / uT; 
-//        //return 0.0; For Test function 
-//    }
-//    else if(mu == 2){
-//        uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//        return prefactor * u[2] / uT;
-//        //return 0.0; For Test function 
-//    }
-//    else if(mu == 3){
-//        return prefactor;
-//
-//    }
-//    else{
-//        cout << "index in alpha bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
-//double alphaBar(int mu, double prefactor, double u1ouT, double u2ouT){
-//    // This function computes the \bar{\alpha} function for its use 
-//    // in the Laguerre integration.
-//    //double uT; // Transverse 4-velocity of flow
-//    // Here, the definition does not contain fugacity factor.
-//    //double prefactor = 2 * M_PI * exp(mu_i/T) * T * T; 
-//    //double prefactor = 2 * M_PI * T * T; 
-//    if(mu == 0){
-//        return prefactor; 
-//    }
-//    else if(mu == 1){
-//        return prefactor * u1ouT; 
-//    }
-//    else if(mu == 2){
-//        return prefactor * u2ouT;
-//    }
-//    else if(mu == 3){
-//        return prefactor;
-//    }
-//    else{
-//        cout << "index in alpha bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
-/// REDO EFFCIENCY
 inline array<double,4> alphaBar_all(double prefactor, double u1ouT, double u2ouT){
     return {
         prefactor,          // μ = 0
@@ -441,47 +331,6 @@ inline array<double,4> alphaBar_all(double prefactor, double u1ouT, double u2ouT
         prefactor           // μ = 3
     };
 }
-
-//double gbar(int mu, double y, double m, double T, vector<double>& u){ 
-//    double Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//    double prefactor = exp(-m/T * Gamma)/(Gamma * Gamma);
-//
-//    if(mu == 0){
-//        return prefactor * cosh(y); 
-//    }
-//    else if(mu == 1){
-//        return prefactor; 
-//    }
-//    else if(mu == 2){
-//        return prefactor;
-//    }
-//    else if(mu == 3){
-//        return prefactor * sinh(y);
-//    }
-//    else{
-//        cout << "index in g bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
-//double gbar(int mu, double y, double prefactor){ 
-//    if(mu == 0){
-//        return prefactor * cosh(y); 
-//    }
-//    else if(mu == 1){
-//        return prefactor; 
-//    }
-//    else if(mu == 2){
-//        return prefactor;
-//    }
-//    else if(mu == 3){
-//        return prefactor * sinh(y);
-//    }
-//    else{
-//        cout << "index in g bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
 
 inline array<double,4> gbar_all(double y, double prefactor)
 {
@@ -524,77 +373,6 @@ double Modified_Bessel_scaled(int NU, double x){
     }
 }
 
-
-
-//double fbar_scaled(int mu, double x, double y, double m, double T, vector<double>& u, double threshold){
-//    // This function coomputes the \bar{f} functions in the Laguerre integration. 
-//    // Note that we use the scaled Bessel functions. 
-//    double Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//    double prefactor = x + m/T*Gamma;
-//
-//    double uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//
-//    double mT = T/Gamma * x + m;
-//    //double pT = GetpT(threshold, mT, m);
-//    double pT = sqrt(mT * mT - m * m);
-//
-//    if(mu == 0){
-//        return prefactor * mT * Modified_Bessel_scaled(0, pT/T * uT); 
-//    }
-//    else if(mu == 1){
-//        return prefactor * pT * Modified_Bessel_scaled(1, pT/T * uT); 
-//    }
-//    else if(mu == 2){
-//        return prefactor * pT * Modified_Bessel_scaled(1, pT/T * uT); 
-//    }
-//    else if(mu == 3){
-//        return prefactor * mT * Modified_Bessel_scaled(0, pT/T * uT); 
-//    }
-//    else{
-//        cout << "index in f bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
-//double fbar_scaled(int mu, double x, double y, double m, double T, vector<double>& u, double threshold){
-
-//double fbar_scaled(int mu, double pT, double mT, double prefactor, double pToTuT){
-//    // This function coomputes the \bar{f} functions in the Laguerre integration. 
-//    // Note that we use the scaled Bessel functions. 
-//    //double Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//    //double prefactor = x + m/T*Gamma;
-//
-//    //double uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//
-//    //double mT = T/Gamma * x + m;
-//    //double pT = GetpT(threshold, mT, m);
-//    //double pT = sqrt(mT * mT - m * m);
-//    
-//    // prefactor = x + m/T * Gamma
-//    // pToTuT = pT/T * ||uT||
-//    
-//    if(mu == 0){
-//        return prefactor * mT * I0_scaled_fast(pToTuT); 
-//        //Modified_Bessel_scaled(0, pToTuT); 
-//    }
-//    else if(mu == 1){
-//        return prefactor * pT * I1_scaled_fast(pToTuT);
-//            //Modified_Bessel_scaled(1, pToTuT); 
-//    }
-//    else if(mu == 2){
-//        return prefactor * pT * I1_scaled_fast(pToTuT);
-//            //Modified_Bessel_scaled(1, pToTuT); 
-//    }
-//    else if(mu == 3){
-//        return prefactor * mT * I0_scaled_fast(pToTuT);
-//            //Modified_Bessel_scaled(0, pToTuT); 
-//    }
-//    else{
-//        cout << "index in f bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
 inline array<double,4> fbar_scaled_all(
         double prefactor,   // x + m/T * Gamma
         double pT,
@@ -624,32 +402,6 @@ inline array<double,4> fbar_scaled_all(
     };
 }
 
-//bool checkdsigmamuXimu(double x, double y, double m, double T, double mu_i, vector<double>& u, vector<double>& dsigma, double threshold){
-//    // This function checks if the calculated 4-momentum is in the same direction as the outward cell 4-vector dsigma^mu
-//    // It corresponds to the actual positive contributions to the particle production. In principle, negative contributions 
-//    // corresponds to particles flowing back to the fluid. 
-//    // It is different from the condition u^mu dsigma_mu > 0 (hydro flow towards the detectors) as u^mu and p^mu are fairly 
-//    // independent. 
-//    // This function ensures that the ratio of number of particles inside and outside acceptance actually makes sense. 
-//    // Note that the use of scaled modified Bessel functions in fbar_scaled is not an issue as the norm is an 
-//    // an exponential function e(pT/T ||uT||) > 0 that is the same for all Xk0 here, it does not change the 
-//    // sign check. 
-//
-//    double x0 = alphaBar(0, T, mu_i, u) * gbar(0, y, m, T, u) * fbar_scaled(0, x, y, m, T, u, threshold) * dsigma[0];
-//    double x1 = alphaBar(1, T, mu_i, u) * gbar(1, y, m, T, u) * fbar_scaled(1, x, y, m, T, u, threshold) * dsigma[1];
-//    double x2 = alphaBar(2, T, mu_i, u) * gbar(2, y, m, T, u) * fbar_scaled(2, x, y, m, T, u, threshold) * dsigma[2];
-//    double x3 = alphaBar(3, T, mu_i, u) * gbar(3, y, m, T, u) * fbar_scaled(3, x, y, m, T, u, threshold) * dsigma[3];
-//    return (x0+x1+x2+x3>0);
-//
-//    //vector<double> Xi;
-//    //for(int i = 0; i<4;i++){
-//    //    Xi.push_back(alphaBar(i, T, mu_i, u) * gbar(i, y, m, T, u) * fbar_scaled(i, x, y, m, T, u, threshold));
-//    //}
-//    //// Note: we use the dotCov function here because after translation into Cartesian coordinates, dsigma is still covariant.
-//    //return (dotCov(Xi, dsigma)>0);
-//}
-
-
 bool checkdsigmamuXimuFULL(double abar0, double abar1, double abar2, double abar3, 
         double gbar0, double gbar1, double gbar2, double gbar3, 
         double fbar0, double fbar1, double fbar2, double fbar3, 
@@ -669,88 +421,7 @@ bool checkdsigmamuXimuFULL(double abar0, double abar1, double abar2, double abar
     double x2 = abar2 * gbar2 * fbar2 * dsigma[2];
     double x3 = abar3 * gbar3 * fbar3 * dsigma[3];
     return (x0+x1+x2+x3>0);
-
-    //vector<double> Xi;
-    //for(int i = 0; i<4;i++){
-    //    Xi.push_back(alphaBar(i, T, mu_i, u) * gbar(i, y, m, T, u) * fbar_scaled(i, x, y, m, T, u, threshold));
-    //}
-    //// Note: we use the dotCov function here because after translation into Cartesian coordinates, dsigma is still covariant.
-    //return (dotCov(Xi, dsigma)>0);
 }
-
-//double getScaledW(double x, double y, double T, double m, double WLag, vector<double>& u, double threshold){
-//    // This function computes the numerically regularized Laguerre weight e^x WLag(x).
-//    // The value of Laguerre weight is more than exponentially decreasing and can reach values very close to 0.
-//    // So close that that the machine cannot handle it anymore. 
-//    // This trick allows to conserved reasonnable values for the Laguerre weight. 
-//    // It is made possible by the use of the scaled modified Bessel functions. This exponential 
-//    // factor that we see here is the one coming for there. 
-//    // If the log evaluation: x + log(WLag(x)) < -32 (2 * machine double precision), return 0.
-//    // If the log evaluation is large than 50, there is an issue. The code shows that there is an issue 
-//    // and set the output value to 0. 
-//    // If the exponant value e(x+log(WLag(x)) > than 700, the Laguerre weights is so suppressed that the result 
-//    // is identically 0. 
-//    
-//    double Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//    double uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//    double mT = T/Gamma * x + m;
-//    //double pT = GetpT(threshold, mT, m);
-//    double pT = sqrt(mT *mT - m * m);
-//
-//    double expon = pT / T * uT;
-//    double check = log(WLag) + pT / T * uT; 
-//
-//    if(check > 50){
-//        cout << "Very large value of w * e^(pT / T uT), exponant value : " << check << endl;
-//        return 0.0;
-//    } 
-//    else if(check < -40){ // exp(-37) ~ 1e-16.
-//        return 0.0;
-//    }
-//    else{
-//        if(expon > 700){ // Machine limit
-//            // Since -40 < log(WLag) + expon < 50, if expon > 700 it means log(WLag) < -750.....
-//            return 0.0;
-//        }
-//        else{
-//            return WLag * exp(expon);
-//        }
-//    }
-//}
-
-//double getScaledW(double x, double y, double T, double m, double WLag, vector<double>& u, double threshold){
-//double getScaledW(double pToTuT, double exppToTuT, double WLag){
-//    // This function computes the numerically regularized Laguerre weight e^x WLag(x).
-//    // The value of Laguerre weight is more than exponentially decreasing and can reach values very close to 0.
-//    // So close that that the machine cannot handle it anymore. 
-//    // This trick allows to conserved reasonnable values for the Laguerre weight. 
-//    // It is made possible by the use of the scaled modified Bessel functions. This exponential 
-//    // factor that we see here is the one coming for there. 
-//    // If the log evaluation: x + log(WLag(x)) < -32 (2 * machine double precision), return 0.
-//    // If the log evaluation is large than 50, there is an issue. The code shows that there is an issue 
-//    // and set the output value to 0. 
-//    // If the exponant value e(x+log(WLag(x)) > than 700, the Laguerre weights is so suppressed that the result 
-//    // is identically 0. 
-//    
-//    double check = log(WLag) + pToTuT; 
-//
-//    if(check > 50){
-//        cout << "Very large value of w * e^(pT / T uT), exponant value : " << check << endl;
-//        return 0.0;
-//    } 
-//    else if(check < -40){ // exp(-37) ~ 1e-16.
-//        return 0.0;
-//    }
-//    else{
-//        if( pToTuT > 700){ // Machine limit
-//            // Since -40 < log(WLag) + expon < 50, if expon > 700 it means log(WLag) < -750.....
-//            return 0.0;
-//        }
-//        else{
-//            return WLag * exppToTuT;
-//        }
-//    }
-//}
 
 double getScaledW_all(double pToTuT, double exppToTuT, double WLag, double logWLag){
     // This function computes the numerically regularized Laguerre weight e^x WLag(x).
@@ -778,78 +449,6 @@ double getScaledW_all(double pToTuT, double exppToTuT, double WLag, double logWL
     // Normal case
     return WLag * exppToTuT;
 }
-
-//double IntegralFull(double YM, const vector<double>& Omega, const vector<double>& Y, int Nleg, const vector<double>& X, const vector<double>& W, int Nlag, 
-//        int mu, double m, double T, 
-//        vector<double>& u, vector<double>& dsigma, double threshold, 
-//        double prefacta, double uToT, double u1ouT, double u2ouT){
-//
-//    // This function computes the Laguerre+Legendre quadrature to coompute integrals in the full space. 
-//    double s = 0.0;
-//    double x, y, scaledW;
-//    double gb, fb, LegO;
-//    double Gamma, prefactgbar, tmp2, tmp3, prefactfbar;
-//    double mT, pT;
-//    double pToTuT;
-//    double exppToTuT;
-//    double gbar0, gbar1, gbar2, gbar3;
-//
-//    // precompute alpha bar function for efficiency
-//    double abarmu = alphaBar(mu, prefacta, u1ouT, u2ouT);
-//    double abar0 = alphaBar(0, prefacta, u1ouT, u2ouT);
-//    double abar1 = alphaBar(1, prefacta, u1ouT, u2ouT);
-//    double abar2 = alphaBar(2, prefacta, u1ouT, u2ouT);
-//    double abar3 = alphaBar(3, prefacta, u1ouT, u2ouT);
-//
-//    for(int i = 0; i<Nleg; i++){
-//        y = Y[i] * YM; // current rapidity, Legendre are calculated in [-1,1], times YM = [-YM, YM]
-//
-//        // Precompute rapidity dependent functions for efficiency.
-//        Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//        prefactgbar = exp(-m/T * Gamma) / (Gamma * Gamma);
-//
-//        tmp2 = m/T * Gamma;
-//        tmp3 = T/Gamma;
-//
-//        //gb = gbar(mu, y, m, T, u);
-//        gb = gbar(mu, y, prefactgbar);
-//        gbar0 = gbar(0, y, prefactgbar);
-//        gbar1 = gbar(1, y, prefactgbar);
-//        gbar2 = gbar(2, y, prefactgbar);
-//        gbar3 = gbar(3, y, prefactgbar);
-//
-//        for(int j = 0; j<Nlag; j++){
-//            x = X[j];
-//
-//            //double Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//            // x + m/T Gamma
-//            //double uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//
-//            // precompute fbar pre factor, mT, pT, pT/T ||uT||, exp(pT/T ||uT||)
-//            // fbar prefactor = x + m/T * Gamma
-//            prefactfbar = x + tmp2;
-//            // mT = T/Gamma * x + m
-//            mT = tmp3 * x + m;
-//            pT = GetpT(threshold, mT, m);
-//            pToTuT = pT * uToT;
-//            exppToTuT = exp(pToTuT);
-//
-//
-//            // Check if the cell will contribute positively to the integrals.
-//            //if(checkdsigmamuXimu(x, y, m, T, mu_i, u, dsigma, threshold)){
-//            //    // Compute scaled Laguerre weight for numerical regularization. 
-//            //    scaledW = getScaledW(x, y, T, m, W[j], u, threshold);
-//            //    fb = fbar_scaled(mu, x, y, m, T, u, threshold);
-//            //    s += Omega[i] * gb * scaledW * fb;
-//            if(checkdsigmamuXimu(pT, mT, prefactfbar, pToTuT, gbar0, gbar1, gbar2, gbar3, abar0, abar1, abar2, abar3, dsigma)){
-//                // Compute scaled Laguerre weight for numerical regularization. 
-//                s += Omega[i] * gb * getScaledW(pToTuT, exppToTuT, W[j]) * fbar_scaled(mu, pT, mT, prefactfbar, pToTuT);
-//            }
-//        }
-//    }
-//    //return alphaBar(mu, T, mu_i, u) * YM * s;
-//    return abarmu * YM * s;
-//}
 
 array<double,4> IntegralFull_all(
         double YM,
@@ -919,51 +518,6 @@ array<double,4> IntegralFull_all(
     };
 }
 
-
-
-//double deltaNcellFull(double YM, const vector<double>& Omega, const vector<double>& Y, int Nleg, const vector<double>& X, const vector<double>& W, int Nlag, double m, double T, double mu_i, vector<double>& u, vector<double>& dsigma, double threshold, double g=1.0){
-//    // This function computes the final contributions from the cells in the full acceptance. 
-//
-//    double Nmu0 = IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, 0, m, T, mu_i, u, dsigma, threshold) * dsigma[0];
-//    double Nmu1 = IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, 1, m, T, mu_i, u, dsigma, threshold) * dsigma[1];
-//    double Nmu2 = IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, 2, m, T, mu_i, u, dsigma, threshold) * dsigma[2];
-//    double Nmu3 = IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, 3, m, T, mu_i, u, dsigma, threshold) * dsigma[3];
-//
-//    return (Nmu0 + Nmu1 + Nmu2 + Nmu3) * g/(8 * M_PI * M_PI * M_PI); // g degeneracy factor
-//    //vector<double> Nmu;
-//    //for(int i = 0; i<4; i++){
-//    //    Nmu.push_back(IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, i, m, T, mu_i, u, dsigma, threshold));
-//    //}
-//    //return dotCov(Nmu, dsigma, g/(8 * M_PI * M_PI * M_PI)); // g degeneracy factor
-//}
-//double deltaNcellFull(double YM, const vector<double>& Omega, const vector<double>& Y, int Nleg, const vector<double>& X, const vector<double>& W, int Nlag, double m, double T, vector<double>& u, vector<double>& dsigma, double threshold, double g=1.0){
-//    // This function computes the final contributions from the cells in the full acceptance. 
-//    
-//    double uT = sqrt(u[1] * u[1] + u[2] * u[2]);
-//    double uToT = uT/T; 
-//    double u1ouT, u2ouT;
-//    if(uT < 1e-14){
-//        u1ouT = 0.0;
-//        u2ouT = 0.0;
-//    }else{
-//        u1ouT = u[1]/uT;
-//        u2ouT = u[2]/uT;
-//    }
-//    double prefacta = 2 * M_PI * T * T; 
-//
-//    double Nmu0 = IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, 0, m, T, u, dsigma, threshold, prefacta, uToT, u1ouT, u2ouT) * dsigma[0];
-//    double Nmu1 = IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, 1, m, T, u, dsigma, threshold, prefacta, uToT, u1ouT, u2ouT) * dsigma[1];
-//    double Nmu2 = IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, 2, m, T, u, dsigma, threshold, prefacta, uToT, u1ouT, u2ouT) * dsigma[2];
-//    double Nmu3 = IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, 3, m, T, u, dsigma, threshold, prefacta, uToT, u1ouT, u2ouT) * dsigma[3];
-//
-//    return (Nmu0 + Nmu1 + Nmu2 + Nmu3) * g/(8 * M_PI * M_PI * M_PI); // g degeneracy factor
-//    //vector<double> Nmu;
-//    //for(int i = 0; i<4; i++){
-//    //    Nmu.push_back(IntegralFull(YM, Omega, Y, Nleg, X, W, Nlag, i, m, T, mu_i, u, dsigma, threshold));
-//    //}
-//    //return dotCov(Nmu, dsigma, g/(8 * M_PI * M_PI * M_PI)); // g degeneracy factor
-//}
-
 double deltaNcellFull(
         double YM,
         const vector<double>& Omega,  // Legendre weights
@@ -1021,75 +575,6 @@ double deltaNcellFull(
 
 // Acceptance space Legendre-Legendre integral ---------------------------------------------
 // -----------------------------------------------------------------------------------------
-//double alphaTilde(int mu, double pTm, double pTM, double T, double mu_i, vector<double>& u){
-//    // This function computes the \tilde{\alpha} function appearing in the Legendre quadrature 
-//    // to compute the particle yield in the acceptance. 
-//    // Note: following the full space integral, not fugacity factor here also.
-//    //double prefactor = M_PI * exp(mu_i/T) * (pTM - pTm); 
-//    double prefactor = M_PI * (pTM - pTm); 
-//    if(mu == 0){
-//        return prefactor; 
-//    }
-//    else if(mu == 1){
-//        double uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//        return prefactor * u[1] / uT; 
-//    }
-//    else if(mu == 2){
-//        double uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//        return prefactor * u[2] / uT;
-//    }
-//    else if(mu == 3){
-//        return prefactor;
-//    }
-//    else{
-//        cout << "index in tilde bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
-//double alphaTilde(int mu, double prefactor, double u1ouT, double u2ouT){
-//    // This function computes the \tilde{\alpha} function appearing in the Legendre quadrature 
-//    // to compute the particle yield in the acceptance. 
-//    // Note: following the full space integral, not fugacity factor here also.
-//    //double prefactor = M_PI * exp(mu_i/T) * (pTM - pTm); 
-//    if(mu == 0){
-//        return prefactor; 
-//    }
-//    else if(mu == 1){
-//        return prefactor * u1ouT; 
-//    }
-//    else if(mu == 2){
-//        return prefactor * u2ouT;
-//    }
-//    else if(mu == 3){
-//        return prefactor;
-//    }
-//    else{
-//        cout << "index in tilde bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
-//double gtilde(int mu, double y){ 
-//    // This function computes the \tilde{g} function appearing in the Legendre quadrature 
-//    // to compute the particle yield in the acceptance. 
-//    if(mu == 0){
-//        return cosh(y); 
-//    }
-//    else if(mu == 1){
-//        return 1.0; 
-//    }
-//    else if(mu == 2){
-//        return 1.0;
-//    }
-//    else if(mu == 3){
-//        return sinh(y);
-//    }
-//    else{
-//        cout << "index in g tilde must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
 
 double GetmT(double treshold, double pT, double m){
     // This function checks the if pT is larger compared to the mass.
@@ -1098,116 +583,13 @@ double GetmT(double treshold, double pT, double m){
     else{return pT;}
 }
 
-//double ftilde(int mu, double pTm, double pTM, double x, double y, double m, double T, vector<double>& u, double threshold){
-//    // This functions computes the \tilde{f} functions appearing in the Legendre quadrature. 
-//    // Note the contrary to the Full space Laguerre quadrature, the modified Bessel functions are not scaled here.
-//    // This is unecessary for finite size acceptance, these functions do not overflow. 
-//    double Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//    double pT = 0.5 *((pTM - pTm) * x + (pTM + pTm));
-//    double mT = GetmT(threshold, pT, m);
-//
-//    double uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//
-//    double prefactor = pT * exp(-mT/T * Gamma);
-//
-//    if(mu == 0){
-//        return prefactor * mT * boost::math::cyl_bessel_i(0, pT/T * uT); 
-//    }
-//    else if(mu == 1){
-//        return prefactor * pT * boost::math::cyl_bessel_i(1, pT/T * uT); 
-//    }
-//    else if(mu == 2){
-//        return prefactor * pT * boost::math::cyl_bessel_i(1, pT/T * uT); 
-//    }
-//    else if(mu == 3){
-//        return prefactor * mT * boost::math::cyl_bessel_i(0, pT/T * uT); 
-//
-//    }
-//    else{
-//        cout << "index in f bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
-//double ftilde(int mu, double pTm, double pTM, double x, double y, double m, double T, vector<double>& u, double threshold){
-//    // This functions computes the \tilde{f} functions appearing in the Legendre quadrature. 
-//    // Note the contrary to the Full space Laguerre quadrature, the modified Bessel functions are not scaled here.
-//    // This is unecessary for finite size acceptance, these functions do not overflow. 
-//    double Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//    double pT = 0.5 *((pTM - pTm) * x + (pTM + pTm));
-//    double mT = GetmT(threshold, pT, m);
-//
-//    double uT = sqrt(u[1] * u[1] + u[2] * u[2]); 
-//
-//    double prefactor = pT * exp(-mT/T * Gamma);
-//
-//    if(mu == 0){
-//        return prefactor * mT * boost::math::cyl_bessel_i(0, pT/T * uT); 
-//    }
-//    else if(mu == 1){
-//        return prefactor * pT * boost::math::cyl_bessel_i(1, pT/T * uT); 
-//    }
-//    else if(mu == 2){
-//        return prefactor * pT * boost::math::cyl_bessel_i(1, pT/T * uT); 
-//    }
-//    else if(mu == 3){
-//        return prefactor * mT * boost::math::cyl_bessel_i(0, pT/T * uT); 
-//
-//    }
-//    else{
-//        cout << "index in f bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-//double ftilde(int mu, double prefactor, double pT, double mT, double pToTuT){
-//    // This functions computes the \tilde{f} functions appearing in the Legendre quadrature. 
-//    // Note the contrary to the Full space Laguerre quadrature, the modified Bessel functions are not scaled here.
-//    // This is unecessary for finite size acceptance, these functions do not overflow. 
-//
-//    if(mu == 0){
-//        return prefactor * mT * I0_fast(pToTuT);
-//            //boost::math::cyl_bessel_i(0, pT/T * uT); 
-//    }
-//    else if(mu == 1){
-//        return prefactor * pT * I1_fast(pToTuT); 
-//            //boost::math::cyl_bessel_i(1, pT/T * uT); 
-//    }
-//    else if(mu == 2){
-//        return prefactor * pT * I1_fast(pToTuT); 
-//            //boost::math::cyl_bessel_i(1, pT/T * uT); 
-//    }
-//    else if(mu == 3){
-//        return prefactor * mT *  I0_fast(pToTuT);
-//            //boost::math::cyl_bessel_i(0, pT/T * uT); 
-//
-//    }
-//    else{
-//        cout << "index in f bar must be between 0 and 3" << endl;
-//        return 0.0;
-//    }
-//}
-
 bool checkdsigmamuXimuLEG(double at0, double at1, double at2, double at3, double gt0, double gt1, double gt2, double gt3, double ft0, double ft1, double ft2, double ft3, const vector<double>& dsigma){
     // This function is equivalent to checkdsigmamuXimu but is adapted for the use with the Legendre x Legendre integrals
-
-
-    //double x0 = alphaTilde(0, prefactatidle, u1ouT, u2ouT) * gtilde(0, y) * ftilde(0, prefactftilde, pT, mT, pToTuT) * dsigma[0];
-    //double x1 = alphaTilde(1, prefactatidle, u1ouT, u2ouT) * gtilde(1, y) * ftilde(1, prefactftilde, pT, mT, pToTuT) * dsigma[1];
-    //double x2 = alphaTilde(2, prefactatidle, u1ouT, u2ouT) * gtilde(2, y) * ftilde(2, prefactftilde, pT, mT, pToTuT) * dsigma[2];
-    //double x3 = alphaTilde(3, prefactatidle, u1ouT, u2ouT) * gtilde(3, y) * ftilde(3, prefactftilde, pT, mT, pToTuT) * dsigma[3];
-
     double x0 = at0 * gt0 * ft0 * dsigma[0];
     double x1 = at1 * gt1 * ft1 * dsigma[1];
     double x2 = at2 * gt2 * ft2 * dsigma[2];
     double x3 = at3 * gt3 * ft3 * dsigma[3];
-
     return (x0+x1+x2+x3>0);
-
-    //vector<double> Xi;
-    //for(int i = 0; i<4;i++){
-    //    Xi.push_back(alphaTilde(i, pTm, pTM, T, mu_i, u) * gtilde(i, y) * ftilde(i, pTm, pTM, x, y, m, T, u, threshold));
-    //}
-    //return (dotCov(Xi, dsigma)>0);
 }
 
 inline array<double,4> gtilde_all(double y)
@@ -1227,10 +609,7 @@ inline array<double,4> ftilde_all(
 )
 {
     // Compute BOTH scaled Bessels once.
-    // pToTuT >= 0 always → safe for Bessel I.
     double I0 = I0_fast(pToTuT);
-    //double I1 = I1_fast(pToTuT);
-    //double I1 = boost::math::cyl_bessel_i(1, pToTuT); // The parametrisation of I1 is not good enough.
     // Interpolation
     double I1 = ScaledB1.eval(pToTuT) * exp(pToTuT);
 
@@ -1259,65 +638,6 @@ inline array<double,4> alphaTilde_all(
         prefactor           // μ = 3
     };
 }
-
-//array<double,4> IntegralAcc(double YM, double pTm, double pTM, const vector<double>& Omega, const vector<double>& Y, int Nleg, const vector<double>& X, const vector<double>& Om, 
-//        double m, double T, const vector<double>& dsigma, const vector<double>& u, double threshold,
-//        double prefactatilde, double u1ouT, double u2ouT, double uT){
-//    // This function computes the Legendre quadratures.
-//
-//    double at0 = alphaTilde(0, prefactatilde, u1ouT, u2ouT);
-//    double at1 = alphaTilde(1, prefactatilde, u1ouT, u2ouT);
-//    double at2 = alphaTilde(2, prefactatilde, u1ouT, u2ouT);
-//    double at3 = alphaTilde(3, prefactatilde, u1ouT, u2ouT);
-//
-//
-//    double s0 = 0.0; 
-//    double s1 = 0.0;  
-//    double s2 = 0.0;
-//    double s3 = 0.0;
-//    double x, y;
-//    double pT, mT, prefactftilde, pToTuT, Gamma;
-//    double ft0, ft1, ft2, ft3;
-//    double gt0, gt1, gt2, gt3;
-//
-//    for(int i = 0; i<Nleg; i++){
-//        y = Y[i] * YM; // current rapidity, Legendre are calculated in [-1,1], times YM = [-YM, YM]
-//        gt0 = gtilde(0, y);
-//        gt1 = gtilde(1, y);
-//        gt2 = gtilde(2, y);
-//        gt3 = gtilde(3, y);
-//        Gamma = cosh(y) * u[0] - sinh(y) * u[3];
-//        for(int j = 0; j<Nleg; j++){
-//            x = X[j];
-//
-//            pT = 0.5 *((pTM - pTm) * x + (pTM + pTm));
-//            mT = GetmT(threshold, pT, m);
-//            prefactftilde = pT * exp(-mT/T * Gamma);
-//            pToTuT = pT/T*uT;
-//
-//            ft0 = ftilde(0, prefactftilde, pT, mT, pToTuT);
-//            ft1 = ftilde(1, prefactftilde, pT, mT, pToTuT);
-//            ft2 = ftilde(2, prefactftilde, pT, mT, pToTuT);
-//            ft3 = ftilde(3, prefactftilde, pT, mT, pToTuT);
-//
-//            if(checkdsigmamuXimuLEG(at0, at1, at2, at3, gt0, gt1, gt2, gt3, ft0, ft1, ft2, ft3, dsigma)){
-//                        //y, prefactatilde, u1ouT, u2ouT, prefactftilde, pT, mT, pToTuT, dsigma)){
-//                s0 += Omega[i] * gt0 * Omega[j] * ft0;
-//                s1 += Omega[i] * gt1 * Omega[j] * ft1;
-//                s2 += Omega[i] * gt2 * Omega[j] * ft2;
-//                s3 += Omega[i] * gt3 * Omega[j] * ft3;
-//            }
-//        }
-//    }
-//    array<double,4> out;
-//    out[0] = at0 * YM * s0;
-//    out[1] = at1 * YM * s1;
-//    out[2] = at2 * YM * s2;
-//    out[3] = at3 * YM * s3;
-//
-//    return out;
-//    //return alphaTilde(mu, pTm, pTM, T, mu_i, u) * YM * s;
-//}
 
 array<double,4> IntegralAcc(
         double YM, double pTm, double pTM,
@@ -1366,25 +686,6 @@ array<double,4> IntegralAcc(
         at[3] * YM * s3
     };
 }
-
-//double deltaNcellAcc(double YM, double pTm, double pTM, const vector<double>& Omega, const vector<double>& Y, int Nleg, const vector<double>& X, const vector<double>& Om, double m, double T, double mu_i, vector<double>& u, vector<double>& dsigma, double threshold, double g=1.0){
-//    // This function computes the total particle yield in acceptance.
-//
-//    double Nmu0 = IntegralAcc(YM, pTm, pTM, Omega, Y, Nleg, X, Om, 0, m, T, mu_i, dsigma, u, threshold) * dsigma[0];
-//    double Nmu1 = IntegralAcc(YM, pTm, pTM, Omega, Y, Nleg, X, Om, 1, m, T, mu_i, dsigma, u, threshold) * dsigma[1];
-//    double Nmu2 = IntegralAcc(YM, pTm, pTM, Omega, Y, Nleg, X, Om, 2, m, T, mu_i, dsigma, u, threshold) * dsigma[2];
-//    double Nmu3 = IntegralAcc(YM, pTm, pTM, Omega, Y, Nleg, X, Om, 3, m, T, mu_i, dsigma, u, threshold) * dsigma[3];
-//
-//    return (Nmu0 + Nmu1 + Nmu2 + Nmu3)*g/(8 * M_PI * M_PI * M_PI);
-//    // Need covariant dsigma in cartesian coordinates.
-//    
-//    //vector<double> N;
-//    //for(int i = 0; i < 4; i++){
-//    //   N.push_back(IntegralAcc(YM, pTm, pTM, Omega, Y, Nleg, X, Om, i, m, T, mu_i, dsigma, u, threshold)); 
-//    //}
-//    //// Need covariant dsigma in cartesian coordinates.
-//    //return dotCov(dsigma, N, g/(8 * M_PI * M_PI * M_PI));
-//}
 
 double deltaNcellAcc(double YM,double pTm, double pTM,
         const vector<double>& Omega, const vector<double>& Y, int Nleg,
@@ -1452,122 +753,8 @@ double Test(Acceptance Full, SurfaceElement Surf){
     double YM = Full.ymax;
 
     double Analytic = analytic_number_density(m, T, mu_i);
-    //cout << "Num Int : " << deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, mu_i, u, dsigma, threshold, 2) * exp(mu_i / T)  / (hbarc * hbarc * hbarc)  << "Analytic Int : " << Analytic << " T : " << T << " muB " << mu_i << endl; 
-    //cout << "Num Int : " << deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, u, dsigma, threshold, 2) * exp(mu_i / T)  / (hbarc * hbarc * hbarc)  << "Analytic Int : " << Analytic << " T : " << T << " muB " << mu_i << endl; 
     return 1.0;
 }
-
-//double TestWithTransverseFlow(Acceptance Full, SurfaceElement Surf)
-//{
-//    double m = 0.938;
-//    double hbarc = 0.1973269804; // GeV*fm
-//
-//    double T = Surf.T_f; 
-//    double mu_i = Surf.mu_B;
-//    double vT = 0.5;  // choose some transverse velocity
-//    double gammaT = 1.0 / std::sqrt(1.0 - vT*vT);
-//
-//    // Already in cartesian coordinates.
-//    // fluid 4-velocity in lab frame
-//    std::vector<double> u = {gammaT, gammaT*vT, 0.0, 0.0};
-//
-//    // comoving time-like hypersurface: dsigma^mu ∝ u^mu
-//    double dV = 1.0;  // fm^3
-//    // get dsigma covariant.
-//    std::vector<double> dsigma = {gammaT*dV, -gammaT*vT*dV, 0.0, 0.0};
-//
-//    NumericalIntegration NumInt;
-//    std::vector<double> XLeg, WLeg, XLag, WLag;
-//    NumInt.GetGaussLegendreCT32(XLeg, WLeg);
-//    NumInt.GetGaussLaguerreCT32(XLag, WLag);
-//
-//    int Nleg = XLeg.size();
-//    int Nlag = XLag.size();
-//
-//    double YM = Full.ymax;  // for a *true* test, make sure this mimics full y range
-//
-//    double threshold = 1000.0;
-//
-//    //double num_int = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, mu_i, u, dsigma, threshold, 2) * exp(mu_i/T) / (hbarc * hbarc * hbarc);
-//    double num_int = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, u, dsigma, threshold, 2) * exp(mu_i/T) / (hbarc * hbarc * hbarc);
-//
-//    double analytic = analytic_number_density(m, T, mu_i);  // n(T, mu)*dV
-//
-//    std::cout << "vT = " << vT
-//              << "  Num Int : " << num_int 
-//              << "  Analytic : " << analytic
-//              << "  ratio = " << num_int/analytic
-//              << std::endl;
-//
-//    return num_int;
-//}
-
-//vector<double> GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf){
-//    // This function computes the probability p = NpAcc/NpFull representing the probability 
-//    // of net proton to end up in the acceptance for one hydro cell.
-//    // It also returns the Net proton yields in acceptance and in the full space (for checks).
-//    vector<double> p;
-//    p.resize(9);
-//
-//    const double hbarc = 0.1973269804; // GeV*fm
-//    double threshold = 1000.0;
-//    double m = 0.938;
-//    double gp = 2;
-//
-//    double T = Surf.T_f; 
-//    double mu_p = Surf.mu_B + Surf.mu_C;
-//    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
-//
-//    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
-//
-//    vector<double> uC = MilneToCartesian(u, Surf);
-//    vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
-//
-//
-//    NumericalIntegration NumInt;
-//    vector<double> XLeg, WLeg, XLag, WLag;
-//
-//    NumInt.GetGaussLegendreCT32(XLeg, WLeg);    
-//    NumInt.GetGaussLaguerreCT32(XLag, WLag);    
-//
-//    int Nleg = XLeg.size();
-//    int Nlag = XLag.size();
-//
-//    double YM = Full.ymax;
-//    double YMAcc = Acc.ymax;
-//
-//    double pTm = Acc.pTmin;
-//    double pTM = Acc.pTmax;
-//
-//    double NpFull;
-//    double NpAcc;
-//
-//    NpFull = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, mu_p, uC, dsigmaC, threshold, gp);
-//    NpAcc = deltaNcellAcc(YMAcc, pTm, pTM, WLeg, XLeg, Nleg, XLeg, WLeg, m, T, mu_p, uC, dsigmaC, threshold, gp);
-//
-//    // alpha
-//    p[0] = NpAcc/NpFull;
-//    // net proton Acc
-//    p[1] = 2 * NpAcc * sinh(mu_p/T) / (hbarc * hbarc * hbarc);
-//    // net proton Full
-//    p[2] = 2 * NpFull * sinh(mu_p/T) / (hbarc * hbarc * hbarc);
-//    // sum proton Acc
-//    p[3] = 2 * NpAcc * cosh(mu_p/T) / (hbarc * hbarc * hbarc);
-//    // sum proton Full
-//    p[4] = 2 * NpFull * cosh(mu_p/T) / (hbarc * hbarc * hbarc);
-//    // protons Acc
-//    p[5] = (p[1] + p[3])/2;
-//    // antiprotons Acc
-//    p[6] = (p[3] - p[1])/2;
-//    // protons Full
-//    p[7] = (p[2] + p[4])/2;
-//    // antiprotons Full
-//    p[8] = (p[4] - p[2])/2;
-//
-//    return p;
-//}
-
-
 
 bool GetProbabilityProtons(Acceptance Acc, Acceptance Full, SurfaceElement Surf, double* p, 
         const vector<double>& XLeg,
@@ -1728,139 +915,6 @@ bool GetSTOREDDATA(Acceptance Acc, Acceptance Full, SurfaceElement Surf, double*
         return true;
     }
 }
-
-//double GetFullNB(Acceptance Full, SurfaceElement Surf){
-//    // This function computes the probability p = NAcc/NFull representing the probability 
-//    // of ending up in the acceptance for one hydro cell.
-//    // It also returns the yields in acceptance and in the full space (for checks).
-//    double threshold = 1000.0;
-//    double m = 0.938;
-//
-//    double T = Surf.T_f; 
-//    double mu_i = Surf.mu_B;
-//    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
-//
-//    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
-//
-//    //vector<double> uC = MilneToCartesian(u, Surf);
-//    //vector<double> dsigmaC = MilneToCartesian(dsigma, Surf);
-//
-//    vector<double> uC = MilneToCartesian(u, Surf);
-//    vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
-//
-//    NumericalIntegration NumInt;
-//    vector<double> XLeg, WLeg, XLag, WLag;
-//
-//    NumInt.GetGaussLegendreCT32(XLeg, WLeg);    
-//    NumInt.GetGaussLaguerreCT32(XLag, WLag);    
-//
-//    int Nleg = XLeg.size();
-//    int Nlag = XLag.size();
-//
-//    double YM = Full.ymax;
-//
-//    double NpFull;
-//    double gp = 2;
-//    double gDelt = 4;
-//
-//    NpFull = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, mu_i, uC, dsigmaC, threshold, gp);
-//    double mu_p = Surf.mu_B + Surf.mu_C;
-//    double mu_n = Surf.mu_B;
-//
-//
-//    double NpFullDelta = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, 1.232, T, mu_i, uC, dsigmaC, threshold, gDelt);
-//    double mudpp = Surf.mu_B + 2 * Surf.mu_C;
-//    double mudp = Surf.mu_B + Surf.mu_C;
-//    double mud0 = Surf.mu_B;
-//    double mudm = Surf.mu_B - Surf.mu_C;
-//
-//
-//
-//
-//    return 2 * NpFull * (sinh(mu_p/T) + sinh(mu_n/T))
-//        + 2 * NpFullDelta * (sinh(mudpp/T) + sinh(mudp/T) + sinh(mud0/T) + sinh(mudm/T));
-//    //return NpFull * exp(mu_n/T);
-//
-//}
-//double GetFullNB(Acceptance Full, SurfaceElement Surf){
-//    // This function computes the probability p = NAcc/NFull representing the probability 
-//    // of ending up in the acceptance for one hydro cell.
-//    // It also returns the yields in acceptance and in the full space (for checks).
-//    double threshold = 100.0;
-//    double m = 0.938;
-//
-//    double T = Surf.T_f; 
-//    double mu_i = Surf.mu_B;
-//    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
-//
-//    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
-//
-//    vector<double> uC = MilneToCartesian(u, Surf);
-//    vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
-//
-//    NumericalIntegration NumInt;
-//    vector<double> XLeg, WLeg, XLag, WLag;
-//
-//    NumInt.GetGaussLegendreCT32(XLeg, WLeg);    
-//    NumInt.GetGaussLaguerreCT32(XLag, WLag);    
-//
-//    int Nleg = XLeg.size();
-//    int Nlag = XLag.size();
-//
-//    double YM = Full.ymax;
-//
-//    double NpFull;
-//    double gp = 2;
-//
-//
-//    NpFull = deltaNcellFull(YM, WLeg, XLeg, Nleg, XLag, WLag, Nlag, m, T, uC, dsigmaC, threshold, gp);
-//    double mu_p = Surf.mu_B + Surf.mu_C;
-//    double mu_n = Surf.mu_B;
-//
-//
-//    return 2 * NpFull * (sinh(mu_p/T) + sinh(mu_n/T));
-//
-//}
-//double GetAccNB(Acceptance Acc, SurfaceElement Surf){
-//    // This function computes the probability p = NAcc/NFull representing the probability 
-//    // of ending up in the acceptance for one hydro cell.
-//    // It also returns the yields in acceptance and in the full space (for checks).
-//    double threshold = 100.0;
-//    double m = 0.938;
-//
-//    double T = Surf.T_f; 
-//    double mu_i = Surf.mu_B;
-//    vector<double> u = {Surf.u[0], Surf.u[1], Surf.u[2], Surf.u[3]};
-//
-//    vector<double> dsigma = {Surf.s[0], Surf.s[1], Surf.s[2], Surf.s[3]};
-//
-//    const vector<double> uC = MilneToCartesian(u, Surf);
-//    const vector<double> dsigmaC = MilneToCartesianSigmaCov(dsigma, Surf);
-//
-//    NumericalIntegration NumInt;
-//    vector<double> XLeg, WLeg;
-//
-//    NumInt.GetGaussLegendreCT32(XLeg, WLeg);    
-//
-//    int NLeg = XLeg.size();
-//
-//    double YMAcc = Acc.ymax;
-//    double pTm = Acc.pTmin;
-//    double pTM = Acc.pTmax;
-//
-//    double gp = 2;
-//
-//
-//    double NpAcc = deltaNcellAcc(YMAcc, pTm, pTM, WLeg, XLeg, NLeg, XLeg, WLeg, m, T, uC, dsigmaC, threshold, gp);
-//
-//    double mu_p = Surf.mu_B + Surf.mu_C;
-//    double mu_n = Surf.mu_B;
-//
-//
-//    return 2 * NpAcc * (sinh(mu_p/T) + sinh(mu_n/T));
-//
-//}
-
 
 void extract_unique_xy_structured(const vector<chis>& data, int nx, int ny,
                                   vector<double>& xs, vector<double>& ys)
